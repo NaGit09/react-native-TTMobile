@@ -12,18 +12,18 @@ import {
 type Event = {
   time: string;
   title: string;
-  duration: string; // ví dụ "4h"
+  duration: number; // đổi sang number, ví dụ 1, 2, 4
   color: string;
 };
 
-// ====== Base events (không set màu cứng) ======
+// ====== Base events ======
 const baseEvents: Omit<Event, "color">[] = [
-  { time: "06:00", title: "Drink 8 glasses of water", duration: "1h" },
-  { time: "08:00", title: "Work", duration: "4h" },
-  { time: "12:00", title: "Take a nap", duration: "1h" },
-  { time: "13:00", title: "Work", duration: "4h" },
-  { time: "18:00", title: "Gym", duration: "2h" },
-  { time: "20:00", title: "Dinner", duration: "1h" },
+  { time: "06:00", title: "Drink 8 glasses of water", duration: 1 },
+  { time: "08:00", title: "Work", duration: 4 },
+  { time: "12:00", title: "Take a nap", duration: 1 },
+  { time: "13:00", title: "Work", duration: 4 },
+  { time: "18:00", title: "Gym", duration: 2 },
+  { time: "20:00", title: "Dinner", duration: 1 },
 ];
 
 const eventColors = ["#A3BFFA", "#FBB6CE", "#C6F6D5", "#FDE68A"];
@@ -63,7 +63,7 @@ function formatHeaderDate(date: Date) {
     day: "numeric",
     month: "short",
     year: "numeric",
-    timeZone: "Asia/Ho_Chi_Minh", // giờ VN
+    timeZone: "Asia/Ho_Chi_Minh",
   });
 }
 
@@ -111,15 +111,14 @@ export default function Calendar() {
       const formatted = `${hour < 10 ? "0" : ""}${hour}:00`;
 
       if (hour < skipUntilHour) {
-        // Bỏ qua giờ này vì nằm trong duration của event trước
-        continue;
+        continue; // skip vì trong duration event trước
       }
 
       const event = events.find((e) => e.time === formatted);
 
       if (event) {
-        const durationHours = parseInt(event.duration.replace("h", ""), 10);
-        skipUntilHour = hour + durationHours; // skip các giờ kế tiếp
+        const durationHours = event.duration;
+        skipUntilHour = hour + durationHours;
 
         rows.push(
           <View key={formatted} style={styles.timeRow}>
@@ -133,7 +132,7 @@ export default function Calendar() {
               >
                 <View style={styles.eventRow}>
                   <Text style={styles.eventTitle}>{event.title}</Text>
-                  <Text style={styles.eventDuration}>{event.duration}</Text>
+                  <Text style={styles.eventDuration}>{event.duration}h</Text>
                 </View>
               </View>
             </View>
