@@ -12,15 +12,27 @@ import {
 type Event = {
   time: string;
   title: string;
-  duration: string;
+  duration: string; // ví dụ "4h"
   color: string;
 };
 
-const events: Event[] = [
-  { time: "06:00", title: "Drink 8 glasses of water", duration: "1h", color: "#A3BFFA" },
-  { time: "08:00", title: "Get a notebook", duration: "1h", color: "#FBB6CE" },
-  { time: "10:00", title: "Work", duration: "4h", color: "#C6F6D5" },
+// ====== Base events (không set màu cứng) ======
+const baseEvents: Omit<Event, "color">[] = [
+  { time: "06:00", title: "Drink 8 glasses of water", duration: "1h" },
+  { time: "08:00", title: "Work", duration: "4h" },
+  { time: "12:00", title: "Take a nap", duration: "1h" },
+  { time: "13:00", title: "Work", duration: "4h" },
+  { time: "18:00", title: "Gym", duration: "2h" },
+  { time: "20:00", title: "Dinner", duration: "1h" },
 ];
+
+const eventColors = ["#A3BFFA", "#FBB6CE", "#C6F6D5", "#FDE68A"];
+
+// Map sự kiện + tự động gán màu
+const events: Event[] = baseEvents.map((event, index) => ({
+  ...event,
+  color: eventColors[index % eventColors.length],
+}));
 
 // ====== Hàm tiện ích ======
 function generateDaysWholeYear() {
@@ -51,7 +63,7 @@ function formatHeaderDate(date: Date) {
     day: "numeric",
     month: "short",
     year: "numeric",
-    timeZone: "Asia/Ho_Chi_Minh", // đảm bảo múi giờ Việt Nam
+    timeZone: "Asia/Ho_Chi_Minh", // giờ VN
   });
 }
 
@@ -89,6 +101,57 @@ export default function Calendar() {
     }, 300);
   }, []);
 
+  // ====== Render timeline có xử lý duration ======
+  const renderTimeline = () => {
+    const rows = [];
+    let skipUntilHour = -1;
+
+    for (let i = 0; i < 18; i++) {
+      const hour = i + 6; // từ 6h đến 23h
+      const formatted = `${hour < 10 ? "0" : ""}${hour}:00`;
+
+      if (hour < skipUntilHour) {
+        // Bỏ qua giờ này vì nằm trong duration của event trước
+        continue;
+      }
+
+      const event = events.find((e) => e.time === formatted);
+
+      if (event) {
+        const durationHours = parseInt(event.duration.replace("h", ""), 10);
+        skipUntilHour = hour + durationHours; // skip các giờ kế tiếp
+
+        rows.push(
+          <View key={formatted} style={styles.timeRow}>
+            <Text style={styles.timeText}>{formatted}</Text>
+            <View style={styles.eventContainer}>
+              <View
+                style={[
+                  styles.eventBox,
+                  { backgroundColor: event.color, minHeight: 60 * durationHours },
+                ]}
+              >
+                <View style={styles.eventRow}>
+                  <Text style={styles.eventTitle}>{event.title}</Text>
+                  <Text style={styles.eventDuration}>{event.duration}</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        );
+      } else {
+        rows.push(
+          <View key={formatted} style={styles.timeRow}>
+            <Text style={styles.timeText}>{formatted}</Text>
+            <View style={styles.eventContainer} />
+          </View>
+        );
+      }
+    }
+
+    return rows;
+  };
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -97,10 +160,8 @@ export default function Calendar() {
         <Text style={styles.headerDate}>{formatHeaderDate(activeDay)}</Text>
       </View>
 
-      {/* Thêm dòng hiển thị Today */}
-      <Text style={styles.todayText}>
-        Today: {formatHeaderDate(today)}
-      </Text>
+      {/* Today */}
+      <Text style={styles.todayText}>Today: {formatHeaderDate(today)}</Text>
 
       {/* Days row */}
       <View style={styles.daysRowWrapper}>
@@ -120,8 +181,8 @@ export default function Calendar() {
                 onPress={() => setActiveDay(day)}
                 style={[
                   styles.dayBox,
-                  isToday && styles.todayBox, // hôm nay: xanh dịu
-                  isActive && styles.activeDayBox, // ngày đang chọn: đen trắng
+                  isToday && styles.todayBox,
+                  isActive && styles.activeDayBox,
                 ]}
               >
                 <Text
@@ -140,31 +201,7 @@ export default function Calendar() {
       </View>
 
       {/* Timeline */}
-      <ScrollView style={styles.timeline}>
-        {Array.from({ length: 18 }, (_, i) => {
-          const hour = i + 6;
-          const formatted = `${hour < 10 ? "0" : ""}${hour}:00`;
-          const event = events.find((e) => e.time === formatted);
-
-          return (
-            <View key={formatted} style={styles.timeRow}>
-              <Text style={styles.timeText}>{formatted}</Text>
-              <View style={styles.eventContainer}>
-                {event ? (
-                  <View
-                    style={[styles.eventBox, { backgroundColor: event.color }]}
-                  >
-                    <View style={styles.eventRow}>
-                        <Text style={styles.eventTitle}>{event.title}</Text>
-                        <Text style={styles.eventDuration}>{event.duration}</Text>
-                    </View>
-                  </View>
-                ) : null}
-              </View>
-            </View>
-          );
-        })}
-      </ScrollView>
+      <ScrollView style={styles.timeline}>{renderTimeline()}</ScrollView>
     </View>
   );
 }
@@ -182,19 +219,15 @@ const styles = StyleSheet.create({
   headerDate: { fontSize: 20, color: "#666" },
   todayText: {
     fontSize: 14,
-    color: "#3B82F6", // xanh dương dịu
+    color: "#3B82F6",
     fontWeight: "bold",
     marginLeft: 20,
     marginBottom: 10,
   },
 
-  // Days row wrapper
-  daysRowWrapper: {
-    height: 100,
-  },
-  daysRowContent: {
-    paddingHorizontal: 10,
-  },
+  // Days row
+  daysRowWrapper: { height: 100 },
+  daysRowContent: { paddingHorizontal: 10 },
   dayBox: {
     width: 80,
     height: 80,
@@ -206,56 +239,35 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  activeDayBox: {
-    borderColor: "#000",
-    backgroundColor: "#000",
-  },
-  todayBox: {
-    borderColor: "#3B82F6", // xanh dương border
-    backgroundColor: "#DBEAFE", // xanh nhạt nền
-  },
-  dayText: {
-    color: "#666",
-    fontSize: 12,
-    fontWeight: "400",
-    textAlign: "center",
-  },
-  activeDayText: {
-    color: "#fff",
-    fontWeight: "bold",
-  },
-  todayDayText: {
-    color: "#1E40AF", // chữ xanh đậm
-    fontWeight: "bold",
-  },
+  activeDayBox: { borderColor: "#000", backgroundColor: "#000" },
+  todayBox: { borderColor: "#3B82F6", backgroundColor: "#DBEAFE" },
+  dayText: { color: "#666", fontSize: 12, fontWeight: "400", textAlign: "center" },
+  activeDayText: { color: "#fff", fontWeight: "bold" },
+  todayDayText: { color: "#1E40AF", fontWeight: "bold" },
 
   // Timeline
   timeline: { marginTop: 20 },
   timeRow: {
-  flexDirection: "row",
-  alignItems: "stretch",
-  minHeight: 60,
-  borderBottomWidth: 1,
-  borderColor: "#f0f0f0",
-  paddingHorizontal: 10,
-},
+    flexDirection: "row",
+    alignItems: "stretch",
+    minHeight: 60,
+    borderBottomWidth: 1,
+    borderColor: "#f0f0f0",
+    paddingHorizontal: 10,
+  },
   timeText: { width: 50, color: "#888", fontSize: 12, marginTop: 5 },
-  eventContainer: { 
-  flex: 1, 
-  paddingLeft: 10,
-  alignSelf: "stretch",
-},
+  eventContainer: { flex: 1, paddingLeft: 10, alignSelf: "stretch" },
   eventBox: {
-  borderRadius: 12,
-  padding: 10,
-  flex: 1,
-},
+    borderRadius: 12,
+    padding: 10,
+    flex: 1,
+    justifyContent: "center",
+  },
   eventRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    },
-
-  eventTitle: { fontWeight: "500", marginBottom: 4 },
-  eventDuration: { fontSize: 12, color: "#666" },
+  },
+  eventTitle: { fontWeight: "500" },
+  eventDuration: { fontSize: 12, color: "#333" },
 });
