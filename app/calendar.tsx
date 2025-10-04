@@ -86,31 +86,45 @@ export default function Calendar() {
     }
 
     setEvents((prevEvents) => {
+      let updatedEvents: Event[];
+
       const exists = prevEvents.find((e) => e.time === selectedTime);
 
       if (exists) {
-        // cập nhật sự kiện đã có
-        return prevEvents.map((e) =>
+        // Cập nhật event cũ
+        updatedEvents = prevEvents.map((e) =>
           e.time === selectedTime
             ? { ...e, title: eventTitleInput, duration: eventDurationInput }
             : e
         );
       } else {
-        // thêm mới
+        // Thêm event mới
         const newEvent: Event = {
           time: selectedTime,
           title: eventTitleInput,
           duration: eventDurationInput,
-          color: eventColors[Math.floor(Math.random() * eventColors.length)],
+          color: "#fff", // tạm thời
         };
-        return [...prevEvents, newEvent];
+        updatedEvents = [...prevEvents, newEvent];
       }
+
+      // Sắp xếp lại theo thứ tự thời gian
+      updatedEvents.sort((a, b) => {
+        const hourA = parseInt(a.time.split(":")[0]);
+        const hourB = parseInt(b.time.split(":")[0]);
+        return hourA - hourB;
+      });
+
+      // Cập nhật lại màu theo quy tắc tuần tự
+      updatedEvents = updatedEvents.map((e, index) => ({
+        ...e,
+        color: eventColors[index % eventColors.length],
+      }));
+
+      return updatedEvents;
     });
 
-    // Đóng modal
     setModalVisible(false);
-
-    // Reset input
     setEventTitleInput("");
     setEventDurationInput(0);
   };
