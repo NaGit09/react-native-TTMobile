@@ -1,18 +1,21 @@
 // app/calendar.tsx
+import { Picker } from "@react-native-picker/picker";
 import React, { useEffect, useRef, useState } from "react";
 import {
-    Dimensions,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Dimensions,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 type Event = {
   time: string;
   title: string;
-  duration: number; // đổi sang number, ví dụ 1, 2, 4
+  duration: number; // số giờ
   color: string;
 };
 
@@ -27,8 +30,6 @@ const baseEvents: Omit<Event, "color">[] = [
 ];
 
 const eventColors = ["#A3BFFA", "#FBB6CE", "#C6F6D5", "#FDE68A"];
-
-// Map sự kiện + tự động gán màu
 const events: Event[] = baseEvents.map((event, index) => ({
   ...event,
   color: eventColors[index % eventColors.length],
@@ -39,23 +40,17 @@ function generateDaysWholeYear() {
   const today = new Date();
   const startOfYear = new Date(today.getFullYear(), 0, 1);
   const endOfYear = new Date(today.getFullYear(), 11, 31);
-
   const days: Date[] = [];
   let current = new Date(startOfYear);
-
   while (current <= endOfYear) {
     days.push(new Date(current));
     current.setDate(current.getDate() + 1);
   }
-
   return days;
 }
 
 function formatDay(date: Date) {
-  return date.toLocaleDateString("en-US", {
-    weekday: "short",
-    day: "numeric",
-  });
+  return date.toLocaleDateString("en-US", { weekday: "short", day: "numeric" });
 }
 
 function formatHeaderDate(date: Date) {
@@ -74,12 +69,18 @@ export default function Calendar() {
   const [activeDay, setActiveDay] = useState<Date>(today);
   const scrollViewRef = useRef<ScrollView>(null);
 
+  // ===== Modal state =====
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [eventTitleInput, setEventTitleInput] = useState("");
+  const [eventDurationInput, setEventDurationInput] = useState(0);
+
   useEffect(() => {
     const generatedDays = generateDaysWholeYear();
     setDays(generatedDays);
     setActiveDay(today);
 
-    // canh giữa ngày hôm nay
+    // scroll tới today
     setTimeout(() => {
       const todayIndex = generatedDays.findIndex(
         (d) => d.toDateString() === today.toDateString()
@@ -90,66 +91,119 @@ export default function Calendar() {
         const marginRight = 8;
         const itemWidth = dayBoxWidth + marginRight;
 
-        const offset =
-          todayIndex * itemWidth - screenWidth / 2 + dayBoxWidth / 2;
+        const offset = todayIndex * itemWidth - screenWidth / 2 + dayBoxWidth / 2;
 
-        scrollViewRef.current.scrollTo({
-          x: offset > 0 ? offset : 0,
-          animated: true,
-        });
+        scrollViewRef.current.scrollTo({ x: offset > 0 ? offset : 0, animated: true });
       }
     }, 300);
   }, []);
 
-  // ====== Render timeline có xử lý duration ======
+  // ===== Render timeline =====
   const renderTimeline = () => {
     const rows = [];
     let skipUntilHour = -1;
 
     for (let i = 0; i < 18; i++) {
-      const hour = i + 6; // từ 6h đến 23h
+      const hour = i + 6;
       const formatted = `${hour < 10 ? "0" : ""}${hour}:00`;
 
-      if (hour < skipUntilHour) {
-        continue; // skip vì trong duration event trước
-      }
+      if (hour < skipUntilHour) continue;
 
       const event = events.find((e) => e.time === formatted);
+      if (event) skipUntilHour = hour + event.duration;
 
-      if (event) {
-        const durationHours = event.duration;
-        skipUntilHour = hour + durationHours;
-
-        rows.push(
-          <View key={formatted} style={styles.timeRow}>
-            <Text style={styles.timeText}>{formatted}</Text>
-            <View style={styles.eventContainer}>
+      rows.push(
+        <TouchableOpacity
+          key={formatted}
+          style={styles.timeRow}
+          onPress={() => {
+            setSelectedTime(formatted);
+            setEventTitleInput(event?.title || "");
+            setEventDurationInput(event?.duration || 0);
+            setModalVisible(true);
+          }}
+        >
+          <Text style={styles.timeText}>{formatted}</Text>
+          <View style={styles.eventContainer}>
+            {event && (
               <View
-                style={[
-                  styles.eventBox,
-                  { backgroundColor: event.color, minHeight: 60 * durationHours },
-                ]}
+                style={[styles.eventBox, { backgroundColor: event.color, minHeight: 60 * event.duration }]}
               >
                 <View style={styles.eventRow}>
                   <Text style={styles.eventTitle}>{event.title}</Text>
                   <Text style={styles.eventDuration}>{event.duration}h</Text>
                 </View>
               </View>
-            </View>
+            )}
           </View>
-        );
-      } else {
-        rows.push(
-          <View key={formatted} style={styles.timeRow}>
-            <Text style={styles.timeText}>{formatted}</Text>
-            <View style={styles.eventContainer} />
-          </View>
-        );
-      }
+        </TouchableOpacity>
+      );
     }
 
     return rows;
   };
+
+  // ===== Modal JSX =====
+  const renderModal = () => (
+    <Modal transparent visible={modalVisible} animationType="fade">
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          {/* Close */}
+          <TouchableOpacity
+            style={styles.modalCloseBtn}
+            onPress={() => setModalVisible(false)}
+          >
+            <Text style={{ fontSize: 24 }}>×</Text>
+          </TouchableOpacity>
+
+          {/* Time */}
+          <Text style={styles.modalTimeText}>Time: {selectedTime}</Text>
+
+          {/* Input */}
+          <TextInput
+            placeholder="Enter event title"
+            style={styles.modalInput}
+            value={eventTitleInput}
+            onChangeText={setEventTitleInput}
+          />
+
+          {/* Picker */}
+          <Picker
+            selectedValue={eventDurationInput}
+            onValueChange={(itemValue) => setEventDurationInput(itemValue)}
+            style={styles.modalPicker}
+          >
+            {Array.from({ length: 9 }, (_, i) => (
+              <Picker.Item key={i} label={i.toString()} value={i} />
+            ))}
+          </Picker>
+
+          {/* Buttons */}
+          <View style={styles.modalBtnRow}>
+            <TouchableOpacity
+              style={[styles.modalBtn, { backgroundColor: "#ddd" }]}
+              onPress={() => {
+                setEventTitleInput("");
+                setEventDurationInput(0);
+              }}
+            >
+              <Text>Reset</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.modalBtn, { backgroundColor: "#3B82F6" }]}
+              onPress={() => {
+                console.log({ time: selectedTime, title: eventTitleInput, duration: eventDurationInput });
+                setModalVisible(false);
+              }}
+            >
+              <Text style={{ color: "#fff" }}>Confirm</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
 
   return (
     <View style={styles.container}>
@@ -173,24 +227,13 @@ export default function Calendar() {
           {days.map((day, i) => {
             const isActive = day.toDateString() === activeDay.toDateString();
             const isToday = day.toDateString() === today.toDateString();
-
             return (
               <TouchableOpacity
                 key={i}
                 onPress={() => setActiveDay(day)}
-                style={[
-                  styles.dayBox,
-                  isToday && styles.todayBox,
-                  isActive && styles.activeDayBox,
-                ]}
+                style={[styles.dayBox, isToday && styles.todayBox, isActive && styles.activeDayBox]}
               >
-                <Text
-                  style={[
-                    styles.dayText,
-                    isToday && styles.todayDayText,
-                    isActive && styles.activeDayText,
-                  ]}
-                >
+                <Text style={[styles.dayText, isToday && styles.todayDayText, isActive && styles.activeDayText]}>
                   {formatDay(day)}
                 </Text>
               </TouchableOpacity>
@@ -201,6 +244,9 @@ export default function Calendar() {
 
       {/* Timeline */}
       <ScrollView style={styles.timeline}>{renderTimeline()}</ScrollView>
+
+      {/* Modal */}
+      {renderModal()}
     </View>
   );
 }
@@ -208,36 +254,15 @@ export default function Calendar() {
 // ====== Styles ======
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff", paddingTop: 20 },
-  header: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    paddingHorizontal: 20,
-    marginBottom: 10,
-  },
+  header: { flexDirection: "row", alignItems: "baseline", paddingHorizontal: 20, marginBottom: 10 },
   headerTitle: { fontSize: 24, fontWeight: "bold", marginRight: 10 },
   headerDate: { fontSize: 20, color: "#666" },
-  todayText: {
-    fontSize: 14,
-    color: "#3B82F6",
-    fontWeight: "bold",
-    marginLeft: 20,
-    marginBottom: 10,
-  },
+  todayText: { fontSize: 14, color: "#3B82F6", fontWeight: "bold", marginLeft: 20, marginBottom: 10 },
 
   // Days row
   daysRowWrapper: { height: 100 },
   daysRowContent: { paddingHorizontal: 10 },
-  dayBox: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    marginRight: 8,
-    backgroundColor: "#fff",
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  dayBox: { width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: "#ddd", marginRight: 8, backgroundColor: "#fff", justifyContent: "center", alignItems: "center" },
   activeDayBox: { borderColor: "#000", backgroundColor: "#000" },
   todayBox: { borderColor: "#3B82F6", backgroundColor: "#DBEAFE" },
   dayText: { color: "#666", fontSize: 12, fontWeight: "400", textAlign: "center" },
@@ -246,27 +271,21 @@ const styles = StyleSheet.create({
 
   // Timeline
   timeline: { marginTop: 20 },
-  timeRow: {
-    flexDirection: "row",
-    alignItems: "stretch",
-    minHeight: 60,
-    borderBottomWidth: 1,
-    borderColor: "#f0f0f0",
-    paddingHorizontal: 10,
-  },
+  timeRow: { flexDirection: "row", alignItems: "stretch", minHeight: 60, borderBottomWidth: 1, borderColor: "#f0f0f0", paddingHorizontal: 10 },
   timeText: { width: 50, color: "#888", fontSize: 12, marginTop: 5 },
   eventContainer: { flex: 1, paddingLeft: 10, alignSelf: "stretch" },
-  eventBox: {
-    borderRadius: 12,
-    padding: 10,
-    flex: 1,
-    justifyContent: "center",
-  },
-  eventRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
+  eventBox: { borderRadius: 12, padding: 10, flex: 1, justifyContent: "center" },
+  eventRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   eventTitle: { fontWeight: "500" },
   eventDuration: { fontSize: 12, color: "#333" },
+
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" },
+  modalContent: { width: 300, backgroundColor: "#fff", borderRadius: 12, padding: 20, position: "relative" },
+  modalCloseBtn: { position: "absolute", top: 10, right: 10 },
+  modalTimeText: { fontWeight: "bold", marginBottom: 10 },
+  modalInput: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 8, marginBottom: 10 },
+  modalPicker: { height: 50, marginBottom: 10 },
+  modalBtnRow: { flexDirection: "row", justifyContent: "space-between" },
+  modalBtn: { flex: 1, padding: 10, borderRadius: 8, marginHorizontal: 5, alignItems: "center" },
 });
