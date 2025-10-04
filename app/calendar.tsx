@@ -19,21 +19,8 @@ type Event = {
   color: string;
 };
 
-// ====== Base events ======
-const baseEvents: Omit<Event, "color">[] = [
-  { time: "06:00", title: "Drink 8 glasses of water", duration: 1 },
-  { time: "08:00", title: "Work", duration: 4 },
-  { time: "12:00", title: "Take a nap", duration: 1 },
-  { time: "13:00", title: "Work", duration: 4 },
-  { time: "18:00", title: "Gym", duration: 2 },
-  { time: "20:00", title: "Dinner", duration: 1 },
-];
-
 const eventColors = ["#A3BFFA", "#FBB6CE", "#C6F6D5", "#FDE68A"];
-const events: Event[] = baseEvents.map((event, index) => ({
-  ...event,
-  color: eventColors[index % eventColors.length],
-}));
+
 
 // ====== Hàm tiện ích ======
 function generateDaysWholeYear() {
@@ -75,6 +62,59 @@ export default function Calendar() {
   const [eventTitleInput, setEventTitleInput] = useState("");
   const [eventDurationInput, setEventDurationInput] = useState(0);
 
+  // ====== Base events ======
+  const [events, setEvents] = useState<Event[]>(() => {
+    const baseEvents: Omit<Event, "color">[] = [
+      { time: "06:00", title: "Drink 8 glasses of water", duration: 1 },
+      { time: "08:00", title: "Work", duration: 4 },
+      { time: "12:00", title: "Take a nap", duration: 1 },
+      { time: "13:00", title: "Work", duration: 4 },
+      { time: "18:00", title: "Gym", duration: 2 },
+      { time: "20:00", title: "Dinner", duration: 1 },
+    ];
+    return baseEvents.map((event, index) => ({
+      ...event,
+      color: eventColors[index % eventColors.length],
+    }));
+  });
+
+  // Khi Confirm trong modal:
+  const handleConfirm = () => {
+    if (!selectedTime || !eventTitleInput || eventDurationInput <= 0) {
+      setModalVisible(false);
+      return;
+    }
+
+    setEvents((prevEvents) => {
+      const exists = prevEvents.find((e) => e.time === selectedTime);
+
+      if (exists) {
+        // cập nhật sự kiện đã có
+        return prevEvents.map((e) =>
+          e.time === selectedTime
+            ? { ...e, title: eventTitleInput, duration: eventDurationInput }
+            : e
+        );
+      } else {
+        // thêm mới
+        const newEvent: Event = {
+          time: selectedTime,
+          title: eventTitleInput,
+          duration: eventDurationInput,
+          color: eventColors[Math.floor(Math.random() * eventColors.length)],
+        };
+        return [...prevEvents, newEvent];
+      }
+    });
+
+    // Đóng modal
+    setModalVisible(false);
+
+    // Reset input
+    setEventTitleInput("");
+    setEventDurationInput(0);
+  };
+
   useEffect(() => {
     const generatedDays = generateDaysWholeYear();
     setDays(generatedDays);
@@ -101,43 +141,66 @@ export default function Calendar() {
   // ===== Render timeline =====
   const renderTimeline = () => {
     const rows = [];
-    let skipUntilHour = -1;
 
     for (let i = 0; i < 18; i++) {
       const hour = i + 6;
       const formatted = `${hour < 10 ? "0" : ""}${hour}:00`;
 
-      if (hour < skipUntilHour) continue;
-
+      // Kiểm tra xem có event nào bắt đầu tại giờ này không
       const event = events.find((e) => e.time === formatted);
-      if (event) skipUntilHour = hour + event.duration;
 
-      rows.push(
-        <TouchableOpacity
-          key={formatted}
-          style={styles.timeRow}
-          onPress={() => {
-            setSelectedTime(formatted);
-            setEventTitleInput(event?.title || "");
-            setEventDurationInput(event?.duration || 0);
-            setModalVisible(true);
-          }}
-        >
-          <Text style={styles.timeText}>{formatted}</Text>
-          <View style={styles.eventContainer}>
-            {event && (
+      if (event) {
+        // Nếu có event bắt đầu tại đây → render eventBox với chiều cao = duration
+        rows.push(
+          <TouchableOpacity
+            key={formatted}
+            style={styles.timeRow}
+            onPress={() => {
+              setSelectedTime(formatted);
+              setEventTitleInput(event.title);
+              setEventDurationInput(event.duration);
+              setModalVisible(true);
+            }}
+          >
+            <Text style={styles.timeText}>{formatted}</Text>
+            <View style={styles.eventContainer}>
               <View
-                style={[styles.eventBox, { backgroundColor: event.color, minHeight: 60 * event.duration }]}
+                style={[
+                  styles.eventBox,
+                  {
+                    backgroundColor: event.color,
+                    minHeight: 60 * event.duration, // Chiều cao theo giờ
+                  },
+                ]}
               >
                 <View style={styles.eventRow}>
                   <Text style={styles.eventTitle}>{event.title}</Text>
                   <Text style={styles.eventDuration}>{event.duration}h</Text>
                 </View>
               </View>
-            )}
-          </View>
-        </TouchableOpacity>
-      );
+            </View>
+          </TouchableOpacity>
+        );
+
+        i += event.duration - 1;
+      } else {
+        // Nếu không có event → render timeRow trống
+        rows.push(
+          <TouchableOpacity
+            key={formatted}
+            style={styles.timeRow}
+            onPress={() => {
+              setSelectedTime(formatted);
+              setEventTitleInput("");
+              setEventDurationInput(0);
+              setModalVisible(true);
+            }}
+          >
+            <Text style={styles.timeText}>{formatted}</Text>
+            <View style={styles.eventContainer} />
+          </TouchableOpacity>
+        );
+      }
     }
 
     return rows;
@@ -192,13 +255,11 @@ export default function Calendar() {
 
             <TouchableOpacity
               style={[styles.modalBtn, { backgroundColor: "#3B82F6" }]}
-              onPress={() => {
-                console.log({ time: selectedTime, title: eventTitleInput, duration: eventDurationInput });
-                setModalVisible(false);
-              }}
+              onPress={handleConfirm} // <-- GỌI NGAY TẠI ĐÂY
             >
               <Text style={{ color: "#fff" }}>Confirm</Text>
             </TouchableOpacity>
+
           </View>
         </View>
       </View>
