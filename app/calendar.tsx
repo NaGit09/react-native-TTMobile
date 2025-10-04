@@ -63,7 +63,8 @@ export default function Calendar() {
   const [eventDurationInput, setEventDurationInput] = useState(0);
 
   // ====== Base events ======
-  const [events, setEvents] = useState<Event[]>(() => {
+  // Gán theo ngày
+  const [eventsByDate, setEventsByDate] = useState<Record<string, Event[]>>(() => {
     const baseEvents: Omit<Event, "color">[] = [
       { time: "06:00", title: "Drink 8 glasses of water", duration: 1 },
       { time: "08:00", title: "Work", duration: 4 },
@@ -72,11 +73,18 @@ export default function Calendar() {
       { time: "18:00", title: "Gym", duration: 2 },
       { time: "20:00", title: "Dinner", duration: 1 },
     ];
-    return baseEvents.map((event, index) => ({
-      ...event,
-      color: eventColors[index % eventColors.length],
-    }));
+
+    // chỉ có events cho ngày hôm nay (4/10/2025 chẳng hạn)
+    const todayKey = today.toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
+
+    return {
+      [todayKey]: baseEvents.map((e, i) => ({
+        ...e,
+        color: eventColors[i % eventColors.length],
+      })),
+    };
   });
+
 
   // Khi Confirm trong modal:
   const handleConfirm = () => {
@@ -85,43 +93,41 @@ export default function Calendar() {
       return;
     }
 
-    setEvents((prevEvents) => {
+    setEventsByDate((prev) => {
+      const dateKey = activeDay.toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
+      const currentEvents = prev[dateKey] || [];
       let updatedEvents: Event[];
 
-      const exists = prevEvents.find((e) => e.time === selectedTime);
+      const exists = currentEvents.find((e) => e.time === selectedTime);
 
       if (exists) {
-        // Cập nhật event cũ
-        updatedEvents = prevEvents.map((e) =>
+        updatedEvents = currentEvents.map((e) =>
           e.time === selectedTime
             ? { ...e, title: eventTitleInput, duration: eventDurationInput }
             : e
         );
       } else {
-        // Thêm event mới
         const newEvent: Event = {
-          time: selectedTime,
+          time: selectedTime!,
           title: eventTitleInput,
           duration: eventDurationInput,
-          color: "#fff", // tạm thời
+          color: "#fff",
         };
-        updatedEvents = [...prevEvents, newEvent];
+        updatedEvents = [...currentEvents, newEvent];
       }
 
-      // Sắp xếp lại theo thứ tự thời gian
       updatedEvents.sort((a, b) => {
         const hourA = parseInt(a.time.split(":")[0]);
         const hourB = parseInt(b.time.split(":")[0]);
         return hourA - hourB;
       });
 
-      // Cập nhật lại màu theo quy tắc tuần tự
-      updatedEvents = updatedEvents.map((e, index) => ({
+      updatedEvents = updatedEvents.map((e, i) => ({
         ...e,
-        color: eventColors[index % eventColors.length],
+        color: eventColors[i % eventColors.length],
       }));
 
-      return updatedEvents;
+      return { ...prev, [dateKey]: updatedEvents };
     });
 
     setModalVisible(false);
@@ -151,6 +157,9 @@ export default function Calendar() {
       }
     }, 300);
   }, []);
+
+  const dateKey = activeDay.toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
+  const events = eventsByDate[dateKey] || [];
 
   // ===== Render timeline =====
   const renderTimeline = () => {
